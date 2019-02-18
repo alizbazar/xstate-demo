@@ -1,28 +1,8 @@
-const { assign } = XState.actions
+const { assign, raise } = XState.actions
 
 // Available variables:
 // Machine (machine factory function)
 // XState (all XState exports)
-
-const getPlayer = id => ({
-  id,
-  initial: 'init',
-  states: {
-    init: {
-      on
-    },
-    rendered: {
-      states: {
-        loading: {},
-        waitingToPlay: {},
-        playing: {},
-      }
-    },
-    error: {},
-    waitingToDetach: {},
-    detached: {},
-  },
-})
 
 const progressEventFactory = ({ introDuration, practiceDuration, hasOutro }) => ({current, playerElapsed}) => {
   let timeLeft
@@ -67,14 +47,14 @@ const lightMachine = Machine({
                 cond: 'startFromPractice',
                 actions: raise({
                   type: 'START',
-                  skipIntro: false,
+                  what: 'practice',
                 }),
               },
               {
                 target: 'intro',
                 actions: raise({
                   type: 'START',
-                  skipIntro: false,
+                  what: 'intro',
                 }),
               },
             ],
@@ -93,9 +73,117 @@ const lightMachine = Machine({
         isPaused: {},
       },
     },
-    introPlayer: getPlayer('intro'),
-    practicePlayer: getPlayer('practice'),
-    outroPlayer: getPlayer('outro'),
+    intro: {
+      id: 'intro',
+      initial: 'detached',
+      states: {
+        detached: {
+          on: {
+            START: {
+              cond: (ctx, e) => e.what === 'intro',
+              target: 'rendered.playing',
+            },
+            PROGRESS: {
+              cond: (ctx, e) => (
+                e.current === 'practice' && e.untilNext < 30
+              ),
+              target: 'rendered',
+            },
+          },
+        },
+        rendered: {
+          initial: 'loading',
+          on: {
+            SKIP: {
+              cond: (ctx, e) => e.what === 'intro',
+              target: 'waitingToDetach',
+              actions: ctx => assign({
+                skippedPosition: ctx.position,
+              })
+            },
+          },
+          states: {
+            loading: {},
+            playing: {},
+          },
+        },
+        error: {},
+        waitingToDetach: {
+          on: {
+            CANCEL_SKIP: {
+              target: 'init',
+              actions: ctx => ({
+                type: 'rewindTo',
+                position: ctx.skippedPosition,
+              }),
+            },
+          },
+        },
+      },
+    },
+    practice: {
+      id: 'practice',
+      initial: 'detached',
+      states: {
+        detached: {
+          on: {
+            START: {
+              cond: (ctx, e) => e.what === 'practice',
+              target: 'rendered.playing',
+            },
+            PROGRESS: {
+              cond: (ctx, e) => (
+                e.current === 'practice' && e.untilNext < 30
+              ),
+              target: 'rendered',
+            },
+          },
+        },
+        rendered: {
+          initial: 'loading',
+          states: {
+            loading: {},
+            playing: {},
+          },
+        },
+        error: {},
+      },
+    },
+    outro: {
+      id: 'outro',
+      initial: 'detached',
+      states: {
+        detached: {
+          on: {
+            PROGRESS: {
+              cond: (ctx, e) => (
+                e.current === 'practice' && e.untilNext < 30
+              ),
+              target: 'rendered',
+            },
+          },
+        },
+        rendered: {
+          initial: 'loading',
+          states: {
+            loading: {},
+            playing: {},
+          },
+        },
+        error: {},
+        waitingToDetach: {
+          on: {
+            CANCEL_SKIP: {
+              target: 'init',
+              actions: ctx => ({
+                type: 'rewindTo',
+                position: ctx.skippedPosition,
+              }),
+            },
+          },
+        },
+      },
+    },
   }
 }, {
   guards: {
