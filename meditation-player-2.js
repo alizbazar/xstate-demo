@@ -176,9 +176,9 @@ const part = Machine({
   },
 }, {
   actions: {
-    saveSkipIntro: (ctx, e) => assign({
-      skippedTrack: e.track,
-      skippedAt: e.skippedAt || 0,
+    saveSkipIntro: assign({
+      skippedTrack: (ctx, e) => e.track,
+      skippedAt: (ctx, e) => e.skippedAt || 0,
     }),
   },
   guards: {
