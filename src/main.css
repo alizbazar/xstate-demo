@@ -1,0 +1,5 @@
+#app .form-control:disabled,
+#app .form-control[readonly] {
+  background-color: #f9f9f9;
+  opacity: 1;
+}

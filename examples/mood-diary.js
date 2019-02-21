@@ -1,7 +1,7 @@
 const { assign, raise } = XState.actions
 
 const ui = Machine({
-  id: 'player',
+  id: 'moodDiary',
   initial: 'start',
   context: {
     moodSelected: null,
@@ -25,14 +25,38 @@ const ui = Machine({
       },
     },
     writeComment: {
+      initial: 'init',
       on: {
-        SAVE: {
-          target: 'saving',
-          actions: ['memorizeComment', 'save'],
+        TYPE: {
+          actions: 'memorizeComment',
+          target: '.init',
         },
-      }
+      },
+      states: {
+        init: {
+          on: {
+            '': [{
+              cond: 'commentIsEmpty',
+              target: 'empty',
+            }, {
+              target: 'filled',
+            }]
+          },
+        },
+        empty: {
+          on: {
+            CANCEL: '#moodDiary.start',
+          },
+        },
+        filled: {
+          on: {
+            SAVE: '#moodDiary.saving',
+          },
+        },
+      },
     },
     saving: {
+      onEntry: 'save',
       on: {
         ERROR: {
           target: 'writeComment',
@@ -50,6 +74,9 @@ const ui = Machine({
     },
   },
 }, {
+  guards: {
+    commentIsEmpty: ctx => !ctx.comment,
+  },
   actions: {
     memorizeMood: assign({ moodSelected: (ctx, e) => e.mood }),
     memorizeComment: assign({ comment: (ctx, e) => e.comment }),
@@ -58,7 +85,19 @@ const ui = Machine({
   },
 })
 
+/*
+Expected events:
 
 { type: 'SELECT', mood: 'happy' }
-{ type: 'SAVE', comment: 'asdfasdf...' }
+{ type: 'SAVE' }
 { type: 'ERROR', error: 'TIMEOUT' }
+{ type: 'SUCCESS' }
+{ type: 'TYPE', comment: 'asdfasdf...' }
+
+Expected actions:
+
+animateToWrite
+showHistory
+save({moodSelected, comment})
+
+*/

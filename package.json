@@ -1,0 +1,30 @@
+{
+  "name": "statecharts-testing",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Albert Nazander <albert@meruhealth.com>",
+  "license": "MIT",
+  "scripts": {
+    "start": "NODE_ENV=development parcel src/index.html",
+    "format": "prettier --write './{src,bin,test}/**/*.{js,jsx,json,md}'",
+    "lint": "prettier --list-different './{src,bin,test}/**/*.{js,jsx,json,md}'"
+  },
+  "dependencies": {
+    "bootstrap": "^4.3.1",
+    "lodash": "^4.17.11",
+    "react": "^16.8.2",
+    "react-dom": "^16.8.2",
+    "reactstrap": "^7.1.0",
+    "xstate": "^4.3.2"
+  },
+  "devDependencies": {
+    "babel-core": "^6.26.3",
+    "babel-loader": "8.0.5",
+    "babel-plugin-transform-class-properties": "^6.24.1",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
+    "babel-preset-env": "^1.7.0",
+    "babel-preset-react": "^6.24.1",
+    "parcel-bundler": "^1.11.0",
+    "prettier": "^1.16.4"
+  }
+}

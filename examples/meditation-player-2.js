@@ -1,3 +1,5 @@
+const XState = require('xstate')
+const { Machine } = XState
 const { assign, raise } = XState.actions
 
 // Available variables:
@@ -5,25 +7,29 @@ const { assign, raise } = XState.actions
 // XState (all XState exports)
 
 
-const part = Machine({
-  id: 'playback-part',
+const statechart = {
+  id: 'meditation-player',
   initial: 'initial',
   context: {
     // provided context
-    hasIntro: true,
-    hasPlayedIntroBefore: true,
-    hasSkippedIntroBefore: true,
+    hasIntro: false,
+    hasPlayedIntroBefore: false,
+    hasSkippedIntroBefore: false,
 
-    hasOutro: true,
-    hasPlayedOutroBefore: true,
-    hasSkippedOutroBefore: true,
+    hasOutro: false,
+    hasPlayedOutroBefore: false,
+    hasSkippedOutroBefore: false,
 
     // internal variables
     error: null,
     skippedTrack: 'intro',
     skippedAt: 123,
+    trackTimeInSec: 0,
   },
   type: 'parallel',
+  on: {
+    PROGRESS: 'saveProgress',
+  },
   states: {
     track: {
       id: 'track',
@@ -43,7 +49,7 @@ const part = Machine({
           },
         },
         intro: {
-          onEntry: raise('_RESET_PLAYER'),
+          onEntry: 'resetPlayer',
           on: {
             TRACK_END: 'practice',
             SKIP: {
@@ -53,7 +59,7 @@ const part = Machine({
           }
         },
         practice: {
-          onEntry: raise('_RESET_PLAYER'),
+          onEntry: 'resetPlayer',
           on: {
             TRACK_END: [{
               cond: 'shouldPlayOutro',
@@ -68,7 +74,7 @@ const part = Machine({
           }
         },
         outro: {
-          onEntry: raise('_RESET_PLAYER'),
+          onEntry: 'resetPlayer',
           on: {
             TRACK_END: 'overtime',
             SKIP: {
@@ -78,7 +84,7 @@ const part = Machine({
           }
         },
         overtime: {
-          onEntry: raise('_END'),
+          onEntry: 'endPractice',
           on: {
             CANCEL_SKIP: {
               target: 'outro',
@@ -131,9 +137,7 @@ const part = Machine({
           after: {
             10000: {
               target: 'error',
-              actions: assign({
-                error: 'BUFFERING_TIMEOUT',
-              }),
+              actions: 'bufferingTimeout',
             },
           },
           on: {
@@ -157,6 +161,27 @@ const part = Machine({
       },
     },
 
+    overtimeClock: {
+      id: 'overtimeClock',
+      initial: 'isOff',
+      states: {
+        isOff: {
+          onExit: 'resetTrackTime',
+          on: {
+            _END: 'isOn',
+          },
+        },
+        isOn: {
+          on: {
+            CANCEL_SKIP: 'isOff',
+          },
+          after: {
+            1000: { actions: 'incrementOvertime', target: 'isOn' },
+          },
+        },
+      }
+    },
+
     didSkip: {
       initial: 'no',
       states: {
@@ -174,36 +199,56 @@ const part = Machine({
       }
     },
   },
-}, {
+}
+
+const actions = {
+  saveSkipIntro: assign({
+    skippedTrack: (ctx, e) => e.track,
+    skippedAt: (ctx, e) => e.skippedAt || 0,
+  }),
+  bufferingTimeout: assign({ error: 'BUFFERING_TIMEOUT' }),
+  saveProgress: assign({ trackTimeInSec: (ctx, e) => e.trackTimeInSec }),
+  resetPlayer: raise('_RESET_PLAYER'),
+  endPractice: raise('_END'),
+  resetTrackTime: assign({ trackTimeInSec: 0 }),
+  incrementOvertime: assign({ trackTimeInSec: ctx => ctx.trackTimeInSec + 1 }),
+}
+
+const guards = {
+  shouldPlayIntro: ctx => ctx.hasIntro ? (!ctx.hasPlayedIntroBefore || !ctx.hasSkippedIntroBefore) : false,
+  shouldPlayOutro: ctx => ctx.hasOutro ? (!ctx.hasPlayedOutroBefore || !ctx.hasSkippedOutroBefore) : false,
+}
+
+const createMachine = (context, extActions) => Machine(statechart, {
   actions: {
-    saveSkipIntro: assign({
-      skippedTrack: (ctx, e) => e.track,
-      skippedAt: (ctx, e) => e.skippedAt || 0,
-    }),
+    ...actions,
+    ...extActions,
   },
-  guards: {
-    shouldPlayIntro: ctx => ctx.hasIntro ? (!ctx.hasPlayedIntroBefore || !ctx.hasSkippedIntroBefore) : false,
-    shouldPlayOutro: ctx => ctx.hasOutro ? (!ctx.hasPlayedOutroBefore || !ctx.hasSkippedOutroBefore) : false,
-  },
+  guards,
+}, {
+  ...statechart.context,
+  ...context,
 })
 
-const sendTrackEnd = track => send({
-  type: 'TRACK_END',
-  track,
-})
+const eventCreators = {
+  sendTrackEnd: track => ({
+    type: 'TRACK_END',
+    track,
+  }),
 
-const sendSkip = (track, skippedAt) => send({
-  type: 'SKIP',
-  skippedAt,
-  track,
-})
+  sendSkip: (track, skippedAt) => ({
+    type: 'SKIP',
+    skippedAt,
+    track,
+  }),
 
-const sendProgress = () => send({ TYPE: 'PROGRESS' })
+  sendProgress: (trackTimeInSec) => ({ TYPE: 'PROGRESS', trackTimeInSec }),
+}
 
 const PRELOAD_BEFORE = 30 // sec
 const SHOW_SKIP_FOR = 10
 const RELEASE_AFTER_SKIP = 15
-function timeBasedPlayerRender ({ introDuration, practiceDuration, outroDuration }) {
+function timeBasedStateFactory ({ introDuration, practiceDuration, outroDuration }) {
 
   return function getState (current, trackTimeInSec, skippedTrack) {
     let preload = null
@@ -232,4 +277,10 @@ function timeBasedPlayerRender ({ introDuration, practiceDuration, outroDuration
       preload,
     }
   }
+}
+
+module.exports = {
+  createMachine,
+  timeBasedStateFactory,
+  eventCreators,
 }
